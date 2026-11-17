@@ -10,12 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flashdial/main.dart';
 
 void main() {
-  testWidgets('renders the FlashDial dial pad', (WidgetTester tester) async {
-    await tester.pumpWidget(const FlashDialApp());
+  testWidgets('renders the offline FlashDial home shell', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const FlashDialApp(firebaseReady: false));
 
     expect(find.text('FlashDial'), findsOneWidget);
-    expect(find.text('Enter a number'), findsOneWidget);
-    expect(find.bySemanticsLabel('Call number'), findsOneWidget);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Dial pad'), findsOneWidget);
+    expect(find.text('Recents'), findsOneWidget);
+    expect(find.text('Options'), findsOneWidget);
   });
 }
