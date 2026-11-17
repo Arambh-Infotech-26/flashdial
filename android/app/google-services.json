@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "353093272532",
+    "project_id": "flashdial",
+    "storage_bucket": "flashdial.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:353093272532:android:c9f399e7fa8c95b00c4c41",
+        "android_client_info": {
+          "package_name": "com.at.flashdial"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "353093272532-hc0f757pb8m27rh30naub4sl8mjv9ll5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.at.flashdial",
+            "certificate_hash": "e65f14d7163852a2092a976ecc46e31c0acc95fd"
+          }
+        },
+        {
+          "client_id": "353093272532-nrhk0bhj06nnjs2q03pgd7q2ih763t20.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.at.flashdial",
+            "certificate_hash": "8cb5379062da3bab258f514641a2c40952c7c482"
+          }
+        },
+        {
+          "client_id": "353093272532-q8bpffkkbt7jsbnq261ss5j1c9qku3ku.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaeuOx00dDOIKpQS4lzpw_vB0c1Tp_e3M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "353093272532-q8bpffkkbt7jsbnq261ss5j1c9qku3ku.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
