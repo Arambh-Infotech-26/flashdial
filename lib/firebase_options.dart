@@ -57,6 +57,8 @@ class DefaultFirebaseOptions {
     appId: '1:353093272532:android:c9f399e7fa8c95b00c4c41',
     messagingSenderId: '353093272532',
     projectId: 'flashdial',
+    databaseURL:
+        'https://flashdial-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'flashdial.firebasestorage.app',
   );
 }

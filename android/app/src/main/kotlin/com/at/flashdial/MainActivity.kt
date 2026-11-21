@@ -24,6 +24,9 @@ class MainActivity : FlutterActivity() {
     private val channelName = "com.at.flashdial/telephony"
     private val eventChannelName = "com.at.flashdial/telephony_events"
     private val roleRequestCode = 7101
+    private val setupPermissionRequestCode = 7104
+    private val callLogPermissionRequestCode = 7103
+    private var pendingPermissionResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -47,16 +50,17 @@ class MainActivity : FlutterActivity() {
                     "getDialerReadiness" -> result.success(isDefaultDialer())
                     "getSetupStatus" -> result.success(setupStatus())
                     "startSetupStep" -> {
-                        startSetupStep(call.argument<String>("step").orEmpty())
-                        result.success(null)
+                        startSetupStep(call.argument<String>("step").orEmpty(), result)
                     }
                     "getInitialDialNumber" -> result.success(intent?.data?.schemeSpecificPart)
-                    "requestCallLogPermission" -> result.success(requestCallLogPermission())
+                    "requestCallLogPermission" -> requestCallLogPermission(result)
                     "getRecentCalls" -> result.success(getRecentCalls())
                     "answerCall" -> result.success(CallManager.answer(call.argument<String>("callId")))
                     "rejectCall", "endCall" -> result.success(CallManager.disconnect(call.argument<String>("callId")))
                     "setMuted" -> result.success(CallManager.toggleMute())
                     "setAudioEndpoint" -> result.success(CallManager.toggleSpeaker())
+                    "setCallHeld" -> result.success(CallManager.toggleHold(call.argument<String>("callId")))
+                    "openDefaultPhoneAppSettings" -> { openDefaultDialerSettings(); result.success(null) }
                     else -> result.notImplemented()
                 }
             } catch (error: SecurityException) {
@@ -102,34 +106,57 @@ class MainActivity : FlutterActivity() {
         return status + mapOf("isReady" to status.values.all { it == true })
     }
 
-    private fun startSetupStep(step: String) {
+    private fun startSetupStep(step: String, result: MethodChannel.Result) {
         when (step) {
-            "defaultDialer" -> requestDialerRole()
-            "coreCalls" -> requestPermissions(listOf(Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_PHONE_STATE))
-            "recents" -> requestPermissions(listOf(Manifest.permission.READ_CALL_LOG))
-            "contacts" -> requestPermissions(listOf(Manifest.permission.READ_CONTACTS))
-            "notifications" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) requestPermissions(listOf(Manifest.permission.POST_NOTIFICATIONS))
-            "bluetooth" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) requestPermissions(listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN))
+            "defaultDialer" -> { requestDialerRole(); result.success(null) }
+            "coreCalls" -> requestPermissions(listOf(Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_PHONE_STATE), result)
+            "recents" -> requestPermissions(listOf(Manifest.permission.READ_CALL_LOG), result)
+            "contacts" -> requestPermissions(listOf(Manifest.permission.READ_CONTACTS), result)
+            "notifications" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) requestPermissions(listOf(Manifest.permission.POST_NOTIFICATIONS), result) else result.success(null)
+            "bluetooth" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) requestPermissions(listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN), result) else result.success(null)
             "battery" -> {
                 val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply { data = Uri.parse("package:$packageName") }
                 startActivity(intent)
+                result.success(null)
             }
-            "fullScreen" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply { data = Uri.parse("package:$packageName") })
+            "fullScreen" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply { data = Uri.parse("package:$packageName") })
+                result.success(null)
+            } else result.success(null)
+            else -> result.success(null)
         }
     }
 
-    private fun requestPermissions(permissions: List<String>) {
+    private fun requestPermissions(permissions: List<String>, result: MethodChannel.Result) {
         val missing = permissions.filterNot(::isGranted)
-        if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 7104)
+        if (missing.isEmpty()) {
+            result.success(setupStatus())
+            return
+        }
+        pendingPermissionResult = result
+        ActivityCompat.requestPermissions(this, missing.toTypedArray(), setupPermissionRequestCode)
     }
 
     private fun requestDialerRole() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(RoleManager::class.java)
-            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER) && !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+            if (roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) return
+            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
                 startActivityForResult(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER), roleRequestCode)
+            } else {
+                openDefaultDialerSettings()
             }
+        } else {
+            val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
+                putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+            }
+            if (intent.resolveActivity(packageManager) != null) startActivity(intent) else openDefaultDialerSettings()
         }
+    }
+
+    private fun openDefaultDialerSettings() {
+        val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+        if (intent.resolveActivity(packageManager) != null) startActivity(intent)
     }
 
     private fun placeCall(number: String) {
@@ -140,10 +167,24 @@ class MainActivity : FlutterActivity() {
         getSystemService(TelecomManager::class.java).placeCall(Uri.fromParts("tel", number, null), null)
     }
 
-    private fun requestCallLogPermission(): Boolean {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED) return true
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CALL_LOG), 7103)
-        return false
+    private fun requestCallLogPermission(result: MethodChannel.Result) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED) {
+            result.success(true)
+            return
+        }
+        pendingPermissionResult = result
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CALL_LOG), callLogPermissionRequestCode)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        val result = pendingPermissionResult ?: return
+        pendingPermissionResult = null
+        if (requestCode == callLogPermissionRequestCode) {
+            result.success(ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED)
+        } else if (requestCode == setupPermissionRequestCode) {
+            result.success(setupStatus())
+        }
     }
 
     private fun getRecentCalls(): List<Map<String, Any?>> {
